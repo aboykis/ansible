@@ -1,0 +1,42 @@
+---
+- name: Create health-test.json
+  hosts: all
+  become: false
+
+  vars:
+    health_test_file: /tmp/health-test.json
+    health_test_content:
+      status: "healthy"
+      timestamp: "{{ ansible_date_time.iso8601 }}"
+      hostname: "{{ ansible_hostname }}"
+      uptime_seconds: "{{ ansible_uptime_seconds }}"
+      checks:
+        disk:
+          status: "ok"
+          free_percent: "{{ ((ansible_mounts | selectattr('mount', 'equalto', '/') | list | first).size_available / (ansible_mounts | selectattr('mount', 'equalto', '/') | list | first).size_total * 100) | round(1) }}"
+        memory:
+          status: "ok"
+          free_mb: "{{ (ansible_memfree_mb) }}"
+          total_mb: "{{ (ansible_memtotal_mb) }}"
+        os:
+          distribution: "{{ ansible_distribution }}"
+          version: "{{ ansible_distribution_version }}"
+          kernel: "{{ ansible_kernel }}"
+
+  tasks:
+    - name: Gather facts
+      ansible.builtin.setup:
+        gather_subset:
+          - hardware
+          - network
+          - virtual
+
+    - name: Write health-test.json to /tmp
+      ansible.builtin.copy:
+        content: "{{ health_test_content | to_nice_json }}"
+        dest: "{{ health_test_file }}"
+        mode: "0644"
+
+    - name: Display health-test.json content
+      ansible.builtin.debug:
+        msg: "{{ lookup('file', health_test_file) }}"
